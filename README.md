@@ -8,23 +8,20 @@ is explicitly labeled as a visual market estimate, never as a confirmed sale.
 When AI Mode returns separate quick-sale/local and curated-online ranges,
 KeepFlip retains both and derives the displayed current-resale envelope from
 those channels.
-The SerpApi prompt asks for distinct exact-title, brand, model,
-visible-condition, current-resale, and profitability-enhancement answers with
-their available confidence values. A second server-side AI call converts
-SerpApi's variable response into a strict KeepFlip JSON schema. The
-deterministic parser remains available as a fallback.
+The SerpApi prompt includes a compact, complete JSON response template for
+KeepFlip's valuation contract. The Function parses SerpApi's answer directly,
+including structured and scalar price responses, and uses deterministic text
+parsing only when the provider does not return usable JSON. This Function does
+not call OpenAI or any second language-model API.
 
-Neither provider receives KeepFlip's existing identity or condition guess.
-SerpApi receives the short-lived image URL. The normalizer receives only a
-bounded text-and-reference projection of the SerpApi response, never the image
-URL. The mobile app reads the signed-in reseller's owner-only profile and
-sends its compact, versioned Buy Rules snapshot to this Function. The Function
+SerpApi receives the short-lived image URL, but not KeepFlip's existing
+identity or condition guess. The mobile app reads the signed-in reseller's
+owner-only profile and sends its compact, versioned Buy Rules snapshot to this Function. The Function
 validates that snapshot and applies it only after it has produced neutral
 market evidence; it is never sent to SerpApi or the normalizer.
 
-The existing folder and Function ID retain the `ebay-sold-comps` name so the
-provider can be upgraded without breaking installed clients. SerpApi is used
-only through its google_ai_mode engine for KeepFlip AI visual valuation and
+This is the v4 implementation; choose the Appwrite Function ID independently
+during deployment. SerpApi is used only through its `google_ai_mode` engine for KeepFlip AI visual valuation and
 follow-up guidance. Direct SerpApi eBay searches are removed. Current active
 eBay supply and competitor context use the official Browse API with a
 server-side application token.
@@ -33,7 +30,6 @@ References:
 
 - <https://serpapi.com/google-ai-mode-api>
 - <https://appwrite.io/docs/products/storage/file-tokens>
-- <https://platform.openai.com/docs/guides/structured-outputs>
 - <https://developer.ebay.com/develop/api/buy/browse_api>
 
 ## Appwrite configuration
@@ -50,13 +46,10 @@ Add these Function variables in Appwrite and redeploy after changing them:
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `SERPAPI_API_KEY` | Yes | Server-only SerpApi credential. Mark it secret. Never add it to an `EXPO_PUBLIC_` variable. |
-| `OPENAI_API_KEY` | Recommended | Server-only credential for schema-constrained response normalization. If absent or temporarily unavailable, the Function uses its deterministic parser. |
-| `OPENAI_MODEL` | No | Structured-Outputs-capable model. Defaults to `gpt-5-nano`. |
 | `EBAY_CLIENT_ID` | Yes for active eBay context | Server-only eBay application client ID used to obtain a client-credentials token for Browse. Never add it to an `EXPO_PUBLIC_` variable. |
 | `EBAY_CLIENT_SECRET` | Yes for active eBay context | Server-only eBay application secret used to obtain a client-credentials token for Browse. Mark it secret. |
 | `EBAY_MARKETPLACE_ID` | No | Browse marketplace header. Defaults to `EBAY_US`. |
-| `OPENAI_NORMALIZER_TIMEOUT_MS` | No | Normalizer timeout. Defaults to `14000`; accepted range is `1000`-`14000`. Keep the combined SerpApi and OpenAI budgets below Appwrite's 30-second synchronous limit. |
-| SERPAPI_HTTP_TIMEOUT_MS | No | KeepFlip AI Mode request timeout. Defaults to 12000 and caps this value at 14000 so the following OpenAI call stays inside Appwrite's synchronous budget. |
+| `SERPAPI_HTTP_TIMEOUT_MS` | No | KeepFlip AI Mode request timeout. Defaults to 30000 milliseconds; keep it within your Appwrite Function timeout. |
 | `SELLER_QUOTA_INTERNAL_SECRET` | Yes | Server-only shared secret used by subscription police to invoke this gateway-protected Function. |
 | `KEEPFLIP_REQUIRE_QUOTA_GATEWAY` | No | Defaults to `true`. Set to `false` only for authenticated local or temporary testing when subscription police is unavailable. |
 
@@ -82,10 +75,9 @@ EXPO_PUBLIC_APPWRITE_EBAY_SOLD_COMPS_FUNCTION_ID=your-existing-function-id
 Migration order:
 
 1. Give the Function's dynamic key the `tokens.write` scope.
-2. Add secret `SERPAPI_API_KEY` and, for structured normalization, secret
-   `OPENAI_API_KEY` to the Function. Add server-only `EBAY_CLIENT_ID`,
-   `EBAY_CLIENT_SECRET`, and optional `EBAY_MARKETPLACE_ID` for active-listing
-   context.
+2. Add secret `SERPAPI_API_KEY` for AI valuation. Add server-only
+   `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, and optional `EBAY_MARKETPLACE_ID`
+   for active-listing context.
 3. Deploy this source with entrypoint `src/main.js`.
 4. Run a new-item analysis and confirm the response contains
    `provider: "serpapi_ai_mode"` and, when Browse credentials are present, a
@@ -122,31 +114,9 @@ Migration order:
 }
 ```
 
-For a multi-photo valuation, use the same Function conversation for each
-captured view:
-
-```json
-{
-  "photoSequence": {
-    "photoNumber": 1,
-    "photoCount": 2
-  }
-}
-```
-
-- `photoCount` may be 2, 3, or 4. A one-photo valuation omits
-  `photoSequence` and completes through the ordinary single-image request.
-- The first request includes `photoSequence.photoNumber: 1` and
-  `continuable: true` is handled by the Function internally. Its response is
-  `phase: "photo_context"` and includes an
-  `aiModeConversation.subsequentRequestToken`.
-- Each later request supplies the next image, the previous continuation token,
-  `hasRefinementImage: true`, and the matching `photoSequence` number. The
-  Function attaches that image to the same AI Mode conversation.
-- The final request is the one with `photoNumber === photoCount`. It returns
-  the complete normalized valuation and marks `photoSequence.status` as
-  `"complete"`. Intermediate context responses are intentionally not priced
-  or normalized.
+Basic scans accept one photo and reject `photoSequence` requests. After the
+first result, a separate detail-photo refinement request may attach one
+additional image to the existing valuation conversation.
 
 The completed valuation's `aiModeConversation.subsequentRequestToken` can also
 be passed to a `profitability_guidance` request. That keeps the action-specific
