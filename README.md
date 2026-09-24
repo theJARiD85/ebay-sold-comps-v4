@@ -26,6 +26,13 @@ follow-up guidance. Direct SerpApi eBay searches are removed. Current active
 eBay supply and competitor context use the official Browse API with a
 server-side application token.
 
+Subscription policy is enforced through the subscription-police gateway. An
+active `keepflip_serious` subscription receives the full AI valuation feature;
+an authenticated caller without that entitlement may use only the free scanner
+allowance of 10 scans per UTC month. The monthly quota is server-authoritative.
+Do not deploy this source over the older v3 Function: the app must call the v4
+Function ID after deployment for the current policy to take effect.
+
 References:
 
 - <https://serpapi.com/google-ai-mode-api>
@@ -52,6 +59,9 @@ Add these Function variables in Appwrite and redeploy after changing them:
 | `SERPAPI_HTTP_TIMEOUT_MS` | No | KeepFlip AI Mode request timeout. Defaults to 30000 milliseconds; keep it within your Appwrite Function timeout. |
 | `SELLER_QUOTA_INTERNAL_SECRET` | Yes | Server-only shared secret used by subscription police to invoke this gateway-protected Function. |
 | `KEEPFLIP_REQUIRE_QUOTA_GATEWAY` | No | Defaults to `true`. Set to `false` only for authenticated local or temporary testing when subscription police is unavailable. |
+| `APPWRITE_DATABASE_ID` | Yes | Database containing subscription and seller-quota rows. |
+| `APPWRITE_USER_SUBSCRIPTIONS_TABLE_ID` | Yes | Subscription rows table; KeepFlip currently uses `user_subscription`. |
+| `APPWRITE_SELLER_QUOTAS_TABLE_ID` | Yes | Server-owned quota rows table; KeepFlip currently uses `seller_quotas`. |
 
 Appwrite supplies the project endpoint, project ID, caller JWT, and dynamic
 Function key at runtime. For photo valuation the Function verifies that the
