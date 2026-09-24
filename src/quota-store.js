@@ -263,7 +263,8 @@ export async function mutateAiQuota(
       };
     }
 
-    if (!access.active) {
+    const canUseScannerFreeTier = access.scannerFree === true;
+    if (!access.active && !canUseScannerFreeTier) {
       throw new QuotaError(
         403,
         "SUBSCRIPTION_REQUIRED",

@@ -4,6 +4,7 @@ import { Client, TablesDB } from "node-appwrite";
 import { createQuotaStore, mutateAiQuota, QuotaError } from "./quota-store.js";
 
 const PROFILE_TRIAL_SCAN_LIMIT = 25;
+const FREE_SCANNER_SCAN_LIMIT = 10;
 const PLAN_LIMITS = {
   hobbyist: { aiValuationScansPerMonth: 100 },
   serious: { aiValuationScansPerMonth: null },
@@ -170,7 +171,11 @@ async function accessForUser(tables, databaseId, userId) {
     };
   }
 
-  return subscriptionAccess;
+  return {
+    ...subscriptionAccess,
+    scannerFree: true,
+    limits: { aiValuationScansPerMonth: FREE_SCANNER_SCAN_LIMIT },
+  };
 }
 
 function operationIdFromBody(body) {
@@ -202,7 +207,7 @@ export async function reserveAiValuation({ headers, auth, body }) {
   const tables = tablesForFunction(headers, auth);
   const databaseId = optionalEnv("APPWRITE_DATABASE_ID", "keepflip");
   const access = await accessForUser(tables, databaseId, auth.callerUserId);
-  if (!access.active) {
+  if (!access.active && access.scannerFree !== true) {
     throw new EntitlementError(
       403,
       "SUBSCRIPTION_REQUIRED",

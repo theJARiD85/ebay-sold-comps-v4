@@ -15,11 +15,15 @@ import main, {
   normalizeAiModeValuation,
   normalizeSerpApiResult,
 } from "../src/main.js";
-import { setTablesFactoryForTests } from "../src/subscription-entitlement.js";
+import {
+  reserveAiValuation,
+  setTablesFactoryForTests,
+} from "../src/subscription-entitlement.js";
 
 process.env.SELLER_QUOTA_INTERNAL_SECRET = "test-gateway-secret";
 
 const USER_ID = "user-serpapi-flow";
+const FREE_USER_ID = "user-free-scanner-flow";
 const AI_MODE_QUERY = AI_MODE_QUERY_LABEL;
 let testOperationNumber = 0;
 const testQuotaRows = new Map();
@@ -80,6 +84,28 @@ setTablesFactoryForTests(() => ({
     return {};
   },
 }));
+
+test("free scanner users can complete at most ten AI scans per UTC month", async () => {
+  const request = (index) => reserveAiValuation({
+    headers: { "x-appwrite-key": "test-dynamic-key" },
+    auth: {
+      callerUserId: FREE_USER_ID,
+      endpoint: "https://appwrite.test/v1",
+      projectId: "keepflip-test",
+    },
+    body: {
+      operationId: `free-scanner-${index}`,
+      purpose: "image_valuation",
+      fileIds: [`photo-${index}`],
+    },
+  });
+
+  for (let index = 0; index < 10; index += 1) {
+    const reservation = await request(index);
+    assert.equal(typeof reservation.release, "function");
+  }
+  await assert.rejects(request(10), { code: "QUOTA_LIMIT_REACHED" });
+});
 
 test("builds the exact AI Mode query with bounded owner-provided details", () => {
   assert.equal(buildAiModeQuery(), AI_MODE_QUERY);
