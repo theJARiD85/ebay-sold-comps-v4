@@ -3,12 +3,9 @@ import { Client, TablesDB } from "node-appwrite";
 
 import { createQuotaStore, mutateAiQuota, QuotaError } from "./quota-store.js";
 
-const PROFILE_TRIAL_SCAN_LIMIT = 25;
 const FREE_SCANNER_SCAN_LIMIT = 10;
 const PLAN_LIMITS = {
-  hobbyist: { aiValuationScansPerMonth: 100 },
   serious: { aiValuationScansPerMonth: null },
-  power: { aiValuationScansPerMonth: null },
 };
 const ACTIVE_STATUSES = new Set(["trialing", "active"]);
 const PERIOD_STATUSES = new Set(["cancelled", "billing_issue", "grace_period"]);
@@ -62,26 +59,11 @@ function isNotFound(error) {
 }
 
 function subscriptionTableId() {
-  return optionalEnv("APPWRITE_USER_SUBSCRIPTIONS_TABLE_ID", "user_subscriptions");
+  return optionalEnv("APPWRITE_USER_SUBSCRIPTIONS_TABLE_ID", "user_subscription");
 }
 
 function quotaTableId() {
   return optionalEnv("APPWRITE_SELLER_QUOTAS_TABLE_ID", "seller_quotas");
-}
-
-function trialClaimsTableId() {
-  return optionalEnv("APPWRITE_TRIAL_DEVICE_CLAIMS_TABLE_ID", "trial_device_claims");
-}
-
-function trialClaimRowId(userId) {
-  return (
-    "t" +
-    crypto
-      .createHash("sha256")
-      .update(`keepflip|trial-device-claim|owner|${userId}`)
-      .digest("hex")
-      .slice(0, 35)
-  );
 }
 
 function tablesForFunction(headers, auth) {
@@ -112,9 +94,13 @@ export function setTablesFactoryForTests(factory) {
 
 function accessFromSubscription(row, now = Date.now()) {
   const plan = text(row?.plan, 32).toLowerCase();
+  const entitlement = text(row?.entitlement, 64);
   const status = text(row?.status, 32).toLowerCase();
   const periodEnd = dateMs(row?.currentPeriodEndsAt);
-  const planLimits = PLAN_LIMITS[plan];
+  const planLimits =
+    plan === "serious" && entitlement === "keepflip_serious"
+      ? PLAN_LIMITS.serious
+      : null;
   const active =
     Boolean(planLimits) &&
     (ACTIVE_STATUSES.has(status)
@@ -154,22 +140,6 @@ async function accessForUser(tables, databaseId, userId) {
     subscription?.ownerId === userId ? subscription : null,
   );
   if (subscriptionAccess.active) return subscriptionAccess;
-
-  // The launch/status call creates this server-owned claim. We only read it
-  // here: a scan cannot create or extend a trial by itself.
-  const claim = await rowOrNull(
-    tables,
-    databaseId,
-    trialClaimsTableId(),
-    trialClaimRowId(userId),
-  );
-  if (claim?.ownerId === userId && dateMs(claim.trialEndDate) > Date.now()) {
-    return {
-      active: true,
-      trialSource: "profile",
-      limits: { aiValuationScansPerMonth: PROFILE_TRIAL_SCAN_LIMIT },
-    };
-  }
 
   return {
     ...subscriptionAccess,

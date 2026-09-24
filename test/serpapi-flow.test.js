@@ -40,11 +40,12 @@ function clone(value) {
 
 setTablesFactoryForTests(() => ({
   async getRow({ tableId, rowId }) {
-    if (tableId === "user_subscriptions" && rowId === USER_ID) {
+    if (tableId === "user_subscription" && rowId === USER_ID) {
       return {
         $id: USER_ID,
         ownerId: USER_ID,
         plan: "serious",
+        entitlement: "keepflip_serious",
         status: "active",
         isTrial: false,
         currentPeriodEndsAt: new Date(Date.now() + 86_400_000).toISOString(),

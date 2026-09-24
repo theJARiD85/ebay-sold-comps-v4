@@ -45,17 +45,6 @@ function validateState(state) {
 
 function normalizeState(state) {
   validateState(state);
-  if (state.trialAiValuations == null) state.trialAiValuations = 0;
-  if (
-    !Number.isSafeInteger(state.trialAiValuations) ||
-    state.trialAiValuations < 0
-  ) {
-    throw new QuotaError(
-      503,
-      "QUOTA_STATE_INVALID",
-      "Trial scan usage requires reconciliation.",
-    );
-  }
   return state;
 }
 
@@ -104,7 +93,6 @@ export function createQuotaStore(tables, databaseId, tableId) {
         ready: true,
         activeListings: 0,
         aiValuations: 0,
-        trialAiValuations: 0,
         month: monthOf(now),
       };
 
@@ -235,19 +223,23 @@ export async function mutateAiQuota(
         return { ok: true, replayed: true, dispatch: false, ...existing };
       }
 
-      const field = existing.trial ? "trialAiValuations" : "aiValuations";
-      const currentPaidMonth =
-        existing.trial ||
-        (existing.month === monthOf(now) && state.month === existing.month);
-      if (currentPaidMonth) {
-        if (state[field] < 1) {
+      if (existing.trial === true) {
+        // Refund any in-flight receipt from the retired profile-trial quota.
+        if (
+          Number.isSafeInteger(state.trialAiValuations) &&
+          state.trialAiValuations > 0
+        ) {
+          state.trialAiValuations -= 1;
+        }
+      } else if (existing.month === monthOf(now) && state.month === existing.month) {
+        if (state.aiValuations < 1) {
           throw new QuotaError(
             503,
             "QUOTA_STATE_INVALID",
             "AI usage requires reconciliation.",
           );
         }
-        state[field] -= 1;
+        state.aiValuations -= 1;
       }
       const receipt = { ...existing, status: "released" };
       await ledger.put(receiptId, receipt, true);
@@ -277,11 +269,10 @@ export async function mutateAiQuota(
       state.month = month;
       state.aiValuations = 0;
     }
-    const field = access.trialSource === "profile" ? "trialAiValuations" : "aiValuations";
     const limit = access.limits.aiValuationScansPerMonth;
     if (
       limit !== null &&
-      (!Number.isInteger(limit) || state[field] >= limit)
+      (!Number.isInteger(limit) || state.aiValuations >= limit)
     ) {
       throw new QuotaError(
         409,
@@ -290,15 +281,15 @@ export async function mutateAiQuota(
       );
     }
 
-    state[field] += 1;
+    state.aiValuations += 1;
     const receipt = {
       operationId: key,
       resourceId: resource,
       kind: "ai",
       status: "consumed",
       month,
-      trial: access.trialSource === "profile",
-      usage: state[field],
+      trial: false,
+      usage: state.aiValuations,
       limit,
     };
     await ledger.put(receiptId, receipt, false);
