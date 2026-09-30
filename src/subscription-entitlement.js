@@ -3,7 +3,7 @@ import { Client, TablesDB } from "node-appwrite";
 
 import { createQuotaStore, mutateAiQuota, QuotaError } from "./quota-store.js";
 
-const FREE_SCANNER_SCAN_LIMIT = 10;
+const FREE_SCANNER_SCAN_LIMIT = 20;
 const PLAN_LIMITS = {
   serious: { aiValuationScansPerMonth: null },
 };
