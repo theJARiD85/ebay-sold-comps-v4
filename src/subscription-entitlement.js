@@ -5,7 +5,7 @@ import { createQuotaStore, mutateAiQuota, QuotaError } from "./quota-store.js";
 
 const FREE_SCANNER_SCAN_LIMIT = 10;
 const PLAN_LIMITS = {
-  serious: { aiValuationScansPerMonth: 100 },
+  serious: { aiValuationScansPerMonth: 200 },
 };
 const ACTIVE_STATUSES = new Set(["trialing", "active"]);
 const PERIOD_STATUSES = new Set(["cancelled", "billing_issue", "grace_period"]);

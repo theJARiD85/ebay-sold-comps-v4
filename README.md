@@ -26,10 +26,9 @@ follow-up guidance. Direct SerpApi eBay searches are removed. Current active
 eBay supply and competitor context use the official Browse API with a
 server-side application token.
 
-Subscription policy is enforced through the subscription-police gateway. An
-active `keepflip_serious` subscription receives the full AI valuation feature;
-an authenticated caller without that entitlement receives the free-tier
-allowance of 20 scans per UTC month. The monthly quota is server-authoritative.
+Subscription policy is enforced through the subscription-police gateway. Free
+accounts receive 10 scans per UTC month. Active Serious accounts receive 200
+scans per UTC month. The monthly quota is server-authoritative.
 Do not deploy this source over the older v3 Function: the app must call the v4
 Function ID after deployment for the current policy to take effect.
 
