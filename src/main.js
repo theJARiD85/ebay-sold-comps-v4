@@ -144,10 +144,12 @@ const AI_MODE_VALUATION_METHODOLOGY = "keepflip_ai_private_sale_range_v2";
 const CONFIRMED_TRANSACTION = "confirmed_transaction";
 
 class RequestError extends Error {
-  constructor(message, statusCode = 500) {
+  constructor(message, statusCode = 500, code = "REQUEST_FAILED", details = null) {
     super(message);
     this.name = "RequestError";
     this.statusCode = statusCode;
+    this.code = code;
+    this.details = details;
   }
 }
 
@@ -6772,8 +6774,13 @@ export default async ({ req, res, log = () => { }, error = () => { } }) => {
         body,
       });
     } catch (gateError) {
-      if (gateError instanceof EntitlementError) {
-        throw new RequestError(gateError.message, gateError.status);
+      if (gateError instanceof EntitlementError || gateError instanceof QuotaError) {
+        throw new RequestError(
+          gateError.message,
+          gateError.status,
+          gateError.code,
+          gateError.details,
+        );
       }
       throw gateError;
     }
@@ -6810,7 +6817,13 @@ export default async ({ req, res, log = () => { }, error = () => { } }) => {
     error(message);
 
     return res.json(
-      { ok: false, error: message },
+      {
+        ok: false,
+        error: message,
+        ...(caughtError instanceof RequestError
+          ? { code: caughtError.code, ...(caughtError.details ? { details: caughtError.details } : {}) }
+          : {}),
+      },
       caughtError instanceof RequestError ? caughtError.statusCode : 500,
     );
   }

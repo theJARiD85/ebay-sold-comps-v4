@@ -1,10 +1,11 @@
 import crypto from "node:crypto";
 
 export class QuotaError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, details = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -278,6 +279,12 @@ export async function mutateAiQuota(
         409,
         "QUOTA_LIMIT_REACHED",
         "Seller quota limit reached.",
+        {
+          quota: "ai",
+          limit,
+          plan: access?.active === true && access.plan === "serious" ? "serious" : null,
+          usage: state.aiValuations,
+        },
       );
     }
 

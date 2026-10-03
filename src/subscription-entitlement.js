@@ -3,9 +3,9 @@ import { Client, TablesDB } from "node-appwrite";
 
 import { createQuotaStore, mutateAiQuota, QuotaError } from "./quota-store.js";
 
-const FREE_SCANNER_SCAN_LIMIT = 20;
+const FREE_SCANNER_SCAN_LIMIT = 10;
 const PLAN_LIMITS = {
-  serious: { aiValuationScansPerMonth: null },
+  serious: { aiValuationScansPerMonth: 100 },
 };
 const ACTIVE_STATUSES = new Set(["trialing", "active"]);
 const PERIOD_STATUSES = new Set(["cancelled", "billing_issue", "grace_period"]);
@@ -111,6 +111,7 @@ function accessFromSubscription(row, now = Date.now()) {
 
   return {
     active,
+    plan: active ? plan : null,
     trialSource: active && row?.isTrial === true ? "store" : null,
     limits: {
       aiValuationScansPerMonth: active
@@ -144,6 +145,7 @@ async function accessForUser(tables, databaseId, userId) {
   return {
     ...subscriptionAccess,
     scannerFree: true,
+    plan: null,
     limits: { aiValuationScansPerMonth: FREE_SCANNER_SCAN_LIMIT },
   };
 }
